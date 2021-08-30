@@ -4,6 +4,7 @@ using System.CommandLine.Invocation;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 using Microsoft.Extensions.DependencyInjection;
 using OpenTabletDriver.Desktop;
 using OpenTabletDriver.Desktop.RPC;
@@ -65,7 +66,10 @@ namespace OpenTabletDriver.Daemon
                 host.ConnectionStateChanged += (sender, state) => 
                     Log.Write("IPC", $"{(state ? "Connected to" : "Disconnected from")} a client.", LogLevel.Debug);
 
-                await host.Run(BuildDaemon());
+                WindowsHookForm whf = WindowsHookForm.Instance; // start the hidden form
+                Task tHost = host.Run(BuildDaemon());
+                Application.Run();
+                await tHost;
             }
         }
 

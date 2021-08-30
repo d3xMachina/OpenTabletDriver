@@ -44,6 +44,8 @@ namespace OpenTabletDriver.Desktop
             get => this.tools;
         }
 
+        public string OriginPath { protected set; get; }
+
         public static Settings GetDefaults()
         {
             return new Settings
@@ -109,7 +111,11 @@ namespace OpenTabletDriver.Desktop
             using (var stream = file.OpenRead())
             using (var sr = new StreamReader(stream))
             using (var jr = new JsonTextReader(sr))
-                return serializer.Deserialize<Settings>(jr);
+			{
+                Settings settings = serializer.Deserialize<Settings>(jr);
+                settings.OriginPath = file.FullName;
+                return settings;
+			}
         }
 
         public static void Recover(FileInfo file, Settings settings)

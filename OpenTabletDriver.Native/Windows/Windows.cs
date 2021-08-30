@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 using Microsoft.Win32.SafeHandles;
 using OpenTabletDriver.Native.Windows.Input;
 using OpenTabletDriver.Native.Windows.Timers;
@@ -57,6 +58,38 @@ namespace OpenTabletDriver.Native.Windows
         [DllImport("winmm.dll", SetLastError = true)]
         public static extern uint timeKillEvent(uint timerEventId);
 
+        [DllImport("user32.dll")]
+        public static extern int RegisterWindowMessage(string lpString);
+
+        [DllImport("user32.dll")]
+        public static extern int DeregisterShellHookWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        public static extern int RegisterShellHookWindow(IntPtr hWnd);
+
+        public enum ShellEvents : int
+        {
+            HSHELL_WINDOWCREATED = 1,
+            HSHELL_WINDOWDESTROYED = 2,
+            HSHELL_ACTIVATESHELLWINDOW = 3, // not used
+            HSHELL_WINDOWACTIVATED = 4,
+            HSHELL_GETMINRECT = 5,
+            HSHELL_REDRAW = 6,
+            HSHELL_TASKMAN = 7,
+            HSHELL_LANGUAGE = 8,
+            HSHELL_ACCESSIBILITYSTATE = 11,
+            HSHELL_APPCOMMAND = 12,
+            HSHELL_RUDEAPPACTIVATED = 32772
+        }
+
+        [DllImport("user32.dll")]
+        public static extern uint GetWindowThreadProcessId(int hWnd, out int lpdwProcessId);
+
+        [DllImport("kernel32.dll")]
+        public static extern IntPtr OpenProcess(int dwDesiredAccess, bool bInheritHandle, int dwProcessId);
+
+        [DllImport("psapi.dll")]
+        public static extern uint GetModuleFileNameEx(IntPtr hProcess, IntPtr hModule, [Out] StringBuilder lpBaseName, [In] [MarshalAs(UnmanagedType.U4)] int nSize);
         #endregion
 
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using Octokit;
 using OpenTabletDriver.Desktop;
@@ -22,6 +23,7 @@ using OpenTabletDriver.Plugin.Logging;
 using OpenTabletDriver.Plugin.Output;
 using OpenTabletDriver.Plugin.Platform.Pointer;
 using OpenTabletDriver.Plugin.Tablet;
+using OpenTabletDriver.Native.Windows;
 using OpenTabletDriver.SystemDrivers;
 
 #nullable enable
@@ -61,6 +63,8 @@ namespace OpenTabletDriver.Daemon
             }
 
             LoadUserSettings();
+            
+            WindowsHookForm.Instance.WindowActivatedEvent += async (sender, windowHandle) => await onWindowActivated(windowHandle);
 
             SleepDetection = new(async () =>
             {
@@ -79,6 +83,7 @@ namespace OpenTabletDriver.Daemon
         private Settings? Settings { set; get; }
         private Collection<LogMessage> LogMessages { set; get; } = new Collection<LogMessage>();
         private Collection<ITool> Tools { set; get; } = new Collection<ITool>();
+        private Collection<string> WindowsProfiles { set; get; } = new Collection<string>();
         private IUpdater Updater = DesktopInterop.Updater;
         private readonly SleepDetectionThread SleepDetection;
 
@@ -196,6 +201,7 @@ namespace OpenTabletDriver.Daemon
         private async void LoadUserSettings()
         {
             AppInfo.PluginManager.Clean();
+            await initWindowProfiles();
             await LoadPlugins();
             await DetectTablets();
 
@@ -435,6 +441,102 @@ namespace OpenTabletDriver.Daemon
                 DeviceReport?.Invoke(this, new DebugReportData(tablet, report));
         }
 
+        private Task initWindowProfiles()
+        {
+            var profilesDir = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory + "profiles\\");
+            if (!profilesDir.Exists)
+			{
+                profilesDir.Create();
+			}
+            else
+            {
+                const string profileExtension = ".json";
+                foreach (FileInfo file in profilesDir.GetFiles())
+                {
+                    if(file.Extension != profileExtension)
+                        continue;
+                    var profileName = file.Name.Substring(0, file.Name.Length - profileExtension.Length);
+                    WindowsProfiles.Add(profileName);
+                }
+            }
+            if(WindowsProfiles.Count() > 0)
+			{
+                Log.Write("Profiles", "Profiles found");
+			}
+            else
+			{
+                Log.Write("Profiles", "No Profile found");
+			}
+            return Task.CompletedTask;
+        }
+
+        private async Task loadWindowProfile(string profilePath, string profileName)
+		{
+            FileInfo profileFile = new FileInfo(profilePath);
+
+            if (!profileFile.Exists)
+			{
+                //WindowsProfiles.Remove(appName);
+                Log.Write("Profiles", "Profile missing: " + profileName);
+                return;
+			}
+
+            var settings = Settings.Deserialize(profileFile);
+            await SetSettings(settings);
+            Log.Write("Profiles", "Profile set: " + profileName);
+		}
+
+        private async Task onWindowActivated(IntPtr windowHandle)
+		{
+            int pid = 0;
+            Windows.GetWindowThreadProcessId(windowHandle.ToInt32(), out pid);
+            /* Slower (0.07% CPU usage on a 3900x) and 0% with the other method
+            Process p;
+            try
+            {
+                p = Process.GetProcessById(pid);
+            }
+            catch (ArgumentException)
+            {
+                // process not running anymore
+                return;
+			}
+            catch (InvalidOperationException e)
+			{
+                Log.Exception(e);
+                return;
+			}
+            string profileName = p.ProcessName;
+            */
+            IntPtr hProcess = Windows.OpenProcess(1040, false, pid);
+            if(hProcess == IntPtr.Zero)
+                return;
+
+            const int nChars = 1024;
+            StringBuilder filename = new StringBuilder(nChars);
+            Windows.GetModuleFileNameEx(hProcess, IntPtr.Zero, filename, nChars);
+            Windows.CloseHandle(hProcess);
+            
+            string profileName = Path.GetFileNameWithoutExtension(filename.ToString());
+            
+            //Log.Write("Profiles", "Windows activated by: " + profileName);
+            
+            bool isCurrentProfileDefault = (Settings.OriginPath == AppInfo.Current.SettingsFile);
+            var currentProfileName = Path.GetFileNameWithoutExtension(Settings.OriginPath);
+            
+            if (WindowsProfiles.Contains(profileName, StringComparer.OrdinalIgnoreCase))
+			{
+                if (!isCurrentProfileDefault && currentProfileName == profileName)
+			    {
+                    return;
+			    }
+                await loadWindowProfile(AppDomain.CurrentDomain.BaseDirectory + "profiles\\" + profileName + ".json", profileName);
+			}
+            else if(!isCurrentProfileDefault)
+			{
+                await loadWindowProfile(AppInfo.Current.SettingsFile, "default");
+			}
+		}
         public Task<bool> HasUpdate()
         {
             return Updater?.CheckForUpdates() ?? Task.FromResult(false);
