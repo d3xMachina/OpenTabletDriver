@@ -7,6 +7,6 @@ set "frameworkwindows=net6.0-windows"
 dotnet publish OpenTabletDriver.Daemon %options% --runtime %runtime% --framework %frameworkwindows% -o build/%runtime%
 dotnet publish OpenTabletDriver.Console %options% --runtime %runtime% --framework %framework% -o build/%runtime%
 dotnet publish OpenTabletDriver.UX.Wpf %options% --runtime %runtime% --framework %frameworkwindows% -o build/%runtime%
-robocopy "OpenTabletDriver/Configurations/" "build/%runtime%/Configurations/" /s /e >nul
+rem robocopy "OpenTabletDriver.Configurations/" "build/%runtime%/Configurations/" /s /e >nul
 pause
 
