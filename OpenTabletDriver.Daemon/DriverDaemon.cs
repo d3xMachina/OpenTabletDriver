@@ -521,8 +521,8 @@ namespace OpenTabletDriver.Daemon
             
             //Log.Write("Profiles", "Windows activated by: " + profileName);
             
-            bool isCurrentProfileDefault = (Settings.OriginPath == AppInfo.Current.SettingsFile);
-            var currentProfileName = Path.GetFileNameWithoutExtension(Settings.OriginPath);
+            bool isCurrentProfileDefault = (Settings != null && Settings.OriginPath == AppInfo.Current.SettingsFile);
+            var currentProfileName = Path.GetFileNameWithoutExtension(Settings?.OriginPath);
             
             if (WindowsProfiles.Contains(profileName, StringComparer.OrdinalIgnoreCase))
 			{
