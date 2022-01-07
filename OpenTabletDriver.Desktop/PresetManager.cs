@@ -22,6 +22,19 @@ namespace OpenTabletDriver.Desktop
             return Presets.Find(preset => preset.Name == presetName);
         }
 
+        public Preset FindWindowPreset(string windowFileName)
+        {
+            string presetName = "exe." + windowFileName;
+            foreach (var preset in Presets)
+            {
+                if (preset.Name.Equals(presetName, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    return preset;
+                }
+            }
+            return null;
+        }
+
         private void Load()
         {
             foreach (var preset in PresetDirectory.EnumerateFiles("*.json"))

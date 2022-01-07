@@ -83,7 +83,7 @@ namespace OpenTabletDriver.Daemon
         private Settings? Settings { set; get; }
         private Collection<LogMessage> LogMessages { set; get; } = new Collection<LogMessage>();
         private Collection<ITool> Tools { set; get; } = new Collection<ITool>();
-        private Collection<string> WindowsProfiles { set; get; } = new Collection<string>();
+        private Settings? defaultSettings = null;
         private IUpdater Updater = DesktopInterop.Updater;
         private readonly SleepDetectionThread SleepDetection;
 
@@ -195,13 +195,15 @@ namespace OpenTabletDriver.Daemon
 
         public async Task ResetSettings()
         {
-            await SetSettings(Settings.GetDefaults());
+            var settings = Settings.GetDefaults();
+            await SetSettings(settings);
+            defaultSettings = settings;
         }
 
         private async void LoadUserSettings()
         {
             AppInfo.PluginManager.Clean();
-            await initWindowProfiles();
+            await refreshPresets();
             await LoadPlugins();
             await DetectTablets();
 
@@ -230,6 +232,7 @@ namespace OpenTabletDriver.Daemon
                     Log.Write("Settings", "Recovery complete");
                     await SetSettings(settings);
                 }
+                defaultSettings = settings;
             }
             else
             {
@@ -441,50 +444,38 @@ namespace OpenTabletDriver.Daemon
                 DeviceReport?.Invoke(this, new DebugReportData(tablet, report));
         }
 
-        private Task initWindowProfiles()
+        public Task refreshPresets()
         {
-            var profilesDir = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory + "profiles\\");
-            if (!profilesDir.Exists)
+            AppInfo.PresetManager.Refresh();
+            if (AppInfo.PresetManager.GetPresets().Count() > 0)
 			{
-                profilesDir.Create();
-			}
-            else
-            {
-                const string profileExtension = ".json";
-                foreach (FileInfo file in profilesDir.GetFiles())
-                {
-                    if(file.Extension != profileExtension)
-                        continue;
-                    var profileName = file.Name.Substring(0, file.Name.Length - profileExtension.Length);
-                    WindowsProfiles.Add(profileName);
-                }
-            }
-            if(WindowsProfiles.Count() > 0)
-			{
-                Log.Write("Profiles", "Profiles found");
+                Log.Write("Settings", "Presets found");
 			}
             else
 			{
-                Log.Write("Profiles", "No Profile found");
+                Log.Write("Settings", "No Preset found");
 			}
             return Task.CompletedTask;
         }
 
-        private async Task loadWindowProfile(string profilePath, string profileName)
+        private async Task ApplyPreset(Preset preset)
 		{
-            FileInfo profileFile = new FileInfo(profilePath);
+            await SetSettings(preset.Settings);
+            Log.Write("Settings", $"Applied preset {preset.Name}");
+        }
 
-            if (!profileFile.Exists)
-			{
-                //WindowsProfiles.Remove(appName);
-                Log.Write("Profiles", "Profile missing: " + profileName);
-                return;
-			}
-
-            var settings = Settings.Deserialize(profileFile);
-            await SetSettings(settings);
-            Log.Write("Profiles", "Profile set: " + profileName);
-		}
+        private async Task ApplyDefaultSettings()
+        {
+            if (defaultSettings != null)
+            {
+                await SetSettings(defaultSettings);
+                Log.Write("Settings", "Applied default settings");
+            }
+            else
+            {
+                Log.Write("Settings", "Cannot apply default settings : missing");
+            }
+        }
 
         private async Task onWindowActivated(IntPtr windowHandle)
 		{
@@ -517,25 +508,31 @@ namespace OpenTabletDriver.Daemon
             Windows.GetModuleFileNameEx(hProcess, IntPtr.Zero, filename, nChars);
             Windows.CloseHandle(hProcess);
             
-            string profileName = Path.GetFileNameWithoutExtension(filename.ToString());
-            
-            //Log.Write("Profiles", "Windows activated by: " + profileName);
-            
-            bool isCurrentProfileDefault = (Settings != null && Settings.OriginPath == AppInfo.Current.SettingsFile);
-            var currentProfileName = Path.GetFileNameWithoutExtension(Settings?.OriginPath);
-            
-            if (WindowsProfiles.Contains(profileName, StringComparer.OrdinalIgnoreCase))
-			{
-                if (!isCurrentProfileDefault && currentProfileName == profileName)
+            string windowFileName = Path.GetFileNameWithoutExtension(filename.ToString());
+            var windowPreset = AppInfo.PresetManager.FindWindowPreset(windowFileName);
+
+            //Log.Write("Window", "Windows activated by: " + windowFileName);
+
+            if (windowPreset != null)
+            {
+                bool isPresetLoaded = (Settings?.OriginPath == windowPreset.Settings.OriginPath);
+                if (!isPresetLoaded)
 			    {
-                    return;
-			    }
-                await loadWindowProfile(AppDomain.CurrentDomain.BaseDirectory + "profiles\\" + profileName + ".json", profileName);
+                    await ApplyPreset(windowPreset);
+                }
 			}
-            else if(!isCurrentProfileDefault)
-			{
-                await loadWindowProfile(AppInfo.Current.SettingsFile, "default");
-			}
+            else if (Settings != null)
+            {
+                bool isCurrentSettingsDefault = (Settings.OriginPath == AppInfo.Current.SettingsFile);
+                if (!isCurrentSettingsDefault)
+                {
+                    bool isCurrentSettingsExePreset = Settings.OriginPath.StartsWith(AppInfo.Current.PresetDirectory + "\\exe.");
+                    if (isCurrentSettingsExePreset)
+                    {
+                        await ApplyDefaultSettings();
+                    }
+                }
+            }
 		}
         public Task<bool> HasUpdate()
         {

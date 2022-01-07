@@ -42,5 +42,7 @@ namespace OpenTabletDriver.Desktop.Contracts
         Task<bool> HasUpdate();
         Task<Release> GetUpdateInfo();
         Task InstallUpdate();
+
+        Task refreshPresets();
     }
 }
