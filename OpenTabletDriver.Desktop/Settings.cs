@@ -15,6 +15,7 @@ namespace OpenTabletDriver.Desktop
         private ProfileCollection profiles = new ProfileCollection();
         private bool lockUsableAreaDisplay, lockUsableAreaTablet;
         private PluginSettingStoreCollection tools = new PluginSettingStoreCollection();
+        private string originPath;
 
         [JsonProperty("Profiles")]
         public ProfileCollection Profiles
@@ -44,7 +45,12 @@ namespace OpenTabletDriver.Desktop
             get => this.tools;
         }
 
-        public string OriginPath { protected set; get; }
+        [JsonProperty("OriginPath")]
+        public string OriginPath
+        {
+            set => RaiseAndSetIfChanged(ref this.originPath, value);
+            get => this.originPath;
+        }
 
         public static Settings GetDefaults()
         {
@@ -52,7 +58,8 @@ namespace OpenTabletDriver.Desktop
             {
                 Profiles = GetDefaultProfiles(),
                 LockUsableAreaDisplay = true,
-                LockUsableAreaTablet = true
+                LockUsableAreaTablet = true,
+                OriginPath = "default"
             };
         }
 
@@ -152,6 +159,7 @@ namespace OpenTabletDriver.Desktop
                 if (file.Exists)
                     file.Delete();
 
+                OriginPath = file.FullName;
                 using (var sw = file.CreateText())
                 using (var jw = new JsonTextWriter(sw))
                     serializer.Serialize(jw, this);
